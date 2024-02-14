@@ -1,22 +1,21 @@
-import os
 import fnmatch
 import json
+import os
 import warnings
 
 import datasets
 import torch
 import transformers
 from accelerate import Accelerator
+from bigcode_eval.arguments import EvalArguments
+from bigcode_eval.evaluator import Evaluator
+from bigcode_eval.tasks import ALL_TASKS
 from transformers import (
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
     HfArgumentParser,
 )
-
-from bigcode_eval.arguments import EvalArguments
-from bigcode_eval.evaluator import Evaluator
-from bigcode_eval.tasks import ALL_TASKS
 
 
 class MultiChoice:
@@ -210,6 +209,13 @@ def parse_args():
         action="store_true",
         help="Don't run generation but benchmark groundtruth (useful for debugging)",
     )
+    parser.add_argument(
+        "--max_time",
+        type=float,
+        default=None,
+        help="Maximum amount of time you allow the model to generate for in seconds."
+    )
+
     return parser.parse_args()
 
 
@@ -323,7 +329,7 @@ def main():
                 revision=args.revision,
                 trust_remote_code=args.trust_remote_code,
                 use_auth_token=args.use_auth_token,
-                padding_side="left",  
+                padding_side="left",
             )
         else:
             # used by default for most models
@@ -333,7 +339,7 @@ def main():
                 trust_remote_code=args.trust_remote_code,
                 use_auth_token=args.use_auth_token,
                 truncation_side="left",
-                padding_side="right",  
+                padding_side="right",
             )
         if not tokenizer.eos_token:
             if tokenizer.bos_token:
@@ -343,7 +349,7 @@ def main():
                 raise ValueError("No eos_token or bos_token found")
         try:
             tokenizer.pad_token = tokenizer.eos_token
-            
+
         # Some models like CodeGeeX2 have pad_token as a read-only property
         except AttributeError:
             print("Not setting pad_token to eos_token")
