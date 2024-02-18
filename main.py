@@ -62,7 +62,12 @@ def parse_args():
     parser.add_argument(
         "--use_auth_token",
         action="store_true",
-        help="Use the token generated when running `huggingface-cli login` (necessary for private model).",
+        help="Use the token generated when running `huggingface-cli login` (necessary for private model). This argument is depreciated and --token should be used instead.",
+    )
+    parser.add_argument(
+        "--token",
+        type=str,
+        help="The token generated when running `huggingface-cli login` (necessary for private model)."
     )
     parser.add_argument(
         "--trust_remote_code",
@@ -269,10 +274,13 @@ def main():
                 f"Non valid precision {args.precision}, choose from: fp16, fp32, bf16"
             )
 
+        if args.use_auth_token:
+            args.token = os.environ["HF_TOKEN"]
+            raise warnings.warn("The `--use_auth_token` argument is deprecated and will be removed in v5 of Transformers. Please use `--token` instead.")
         model_kwargs = {
             "revision": args.revision,
             "trust_remote_code": args.trust_remote_code,
-            "use_auth_token": args.use_auth_token,
+            "token": args.token,
         }
         if args.load_in_8bit:
             print("Loading model in 8bit")
@@ -328,7 +336,7 @@ def main():
                 args.model,
                 revision=args.revision,
                 trust_remote_code=args.trust_remote_code,
-                use_auth_token=args.use_auth_token,
+                token=token,
                 padding_side="left",
             )
         else:
@@ -337,7 +345,7 @@ def main():
                 args.model,
                 revision=args.revision,
                 trust_remote_code=args.trust_remote_code,
-                use_auth_token=args.use_auth_token,
+                token=token,
                 truncation_side="left",
                 padding_side="right",
             )
