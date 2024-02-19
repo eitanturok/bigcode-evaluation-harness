@@ -1,7 +1,12 @@
+import copy
 import fnmatch
 import json
+import logging
 import os
+import sys
 import warnings
+from datetime import datetime
+from typing import Any, Dict, Union
 
 import datasets
 import torch
@@ -10,11 +15,22 @@ from accelerate import Accelerator
 from bigcode_eval.arguments import EvalArguments
 from bigcode_eval.evaluator import Evaluator
 from bigcode_eval.tasks import ALL_TASKS
+from llmfoundry.utils.config_utils import log_config, pop_config
+from omegaconf import DictConfig
+from omegaconf import OmegaConf as om
 from transformers import (
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
     HfArgumentParser,
+)
+
+from composer.utils import (
+    dist,
+    get_device,
+    maybe_create_object_store_from_uri,
+    parse_uri,
+    reproducibility,
 )
 
 
@@ -34,6 +50,30 @@ class MultiChoice:
         for choice in self.choices:
             yield choice
 
+
+def parse_config(cfg: DictConfig):
+
+    om.resolve(cfg)
+
+    logged_cfg: DictConfig = copy.deepcopy(cfg)
+    print('Evaluation config:')
+    log_config(logged_cfg)
+
+    eval_configs: DictConfig = pop_config(cfg, 'eval_configs', must_exist=False, default_value={})
+    model_config: DictConfig = pop_config(cfg, 'model', must_exist=True)
+    loggers_cfg: Dict[str, Any] = pop_config(cfg, 'loggers', must_exist=False, default_value={})
+
+    mode = pop_config(om.to_container(cfg, resolve=True), 'mode', must_exist=False, default_value='generate_and_eval')
+    seed: int = pop_config(cfg, 'seed', must_exist=False, default_value=17)
+    dist_timeout: Union[float, int] = pop_config(cfg, 'dist_timeout', must_exist=False, default_value=600.0)
+
+    default_run_name: str = os.environ.get('RUN_NAME', 'llm')
+    run_name: str = pop_config(cfg, 'run_name', must_exist=False, default_value=default_run_name)
+
+    date_str: str = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+    tmp_generations_path: str = f"tmp-generations/{date_str}-generations"
+    generations_save_folder: str = cfg.get("generations_save_folder", tmp_generations_path)
+    return eval_configs, model_config, loggers_cfg, mode, seed, dist_timeout, run_name, generations_save_folder
 
 def parse_args():
     parser = HfArgumentParser(EvalArguments)
@@ -240,7 +280,14 @@ def get_gpus_max_memory(max_memory, num_gpus):
     return max_memory
 
 
-def main():
+def main(cfg: DictConfig):
+
+    log = logging.getLogger(__name__)
+    eval_configs, model_config, loggers_cfg, mode, seed, dist_timeout, run_name, generations_save_folder = parse_config(cfg)
+
+    reproducibility.seed_all(seed)
+    dist.initialize_dist(get_device(None), timeout=dist_timeout)
+
     args = parse_args()
     transformers.logging.set_verbosity_error()
     datasets.logging.set_verbosity_error()
@@ -420,7 +467,3 @@ def main():
 
         with open(args.metric_output_path, "w") as f:
             f.write(dumped)
-
-
-if __name__ == "__main__":
-    main()
