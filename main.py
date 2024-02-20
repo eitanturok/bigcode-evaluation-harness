@@ -349,7 +349,6 @@ def main():
                 args.model,
                 revision=args.revision,
                 trust_remote_code=args.trust_remote_code,
-                token=token,
                 padding_side="left",
             )
         else:
@@ -358,7 +357,6 @@ def main():
                 args.model,
                 revision=args.revision,
                 trust_remote_code=args.trust_remote_code,
-                token=token,
                 truncation_side="left",
                 padding_side="right",
             )
