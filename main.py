@@ -12,9 +12,13 @@ import datasets
 import torch
 import transformers
 from accelerate import Accelerator
-from bigcode_eval.arguments import EvalArguments
-from bigcode_eval.evaluator import Evaluator
-from bigcode_eval.tasks import ALL_TASKS
+from composer.utils import (
+    dist,
+    get_device,
+    maybe_create_object_store_from_uri,
+    parse_uri,
+    reproducibility,
+)
 from llmfoundry.utils.config_utils import log_config, pop_config
 from omegaconf import DictConfig
 from omegaconf import OmegaConf as om
@@ -25,13 +29,9 @@ from transformers import (
     HfArgumentParser,
 )
 
-from composer.utils import (
-    dist,
-    get_device,
-    maybe_create_object_store_from_uri,
-    parse_uri,
-    reproducibility,
-)
+from bigcode_eval.arguments import EvalArguments
+from bigcode_eval.evaluator import Evaluator
+from bigcode_eval.tasks import ALL_TASKS
 
 
 class MultiChoice:
@@ -49,31 +49,6 @@ class MultiChoice:
     def __iter__(self):
         for choice in self.choices:
             yield choice
-
-
-def parse_config(cfg: DictConfig):
-
-    om.resolve(cfg)
-
-    logged_cfg: DictConfig = copy.deepcopy(cfg)
-    print('Evaluation config:')
-    log_config(logged_cfg)
-
-    eval_configs: DictConfig = pop_config(cfg, 'eval_configs', must_exist=False, default_value={})
-    model_config: DictConfig = pop_config(cfg, 'model', must_exist=True)
-    loggers_cfg: Dict[str, Any] = pop_config(cfg, 'loggers', must_exist=False, default_value={})
-
-    mode = pop_config(om.to_container(cfg, resolve=True), 'mode', must_exist=False, default_value='generate_and_eval')
-    seed: int = pop_config(cfg, 'seed', must_exist=False, default_value=17)
-    dist_timeout: Union[float, int] = pop_config(cfg, 'dist_timeout', must_exist=False, default_value=600.0)
-
-    default_run_name: str = os.environ.get('RUN_NAME', 'llm')
-    run_name: str = pop_config(cfg, 'run_name', must_exist=False, default_value=default_run_name)
-
-    date_str: str = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
-    tmp_generations_path: str = f"tmp-generations/{date_str}-generations"
-    generations_save_folder: str = cfg.get("generations_save_folder", tmp_generations_path)
-    return eval_configs, model_config, loggers_cfg, mode, seed, dist_timeout, run_name, generations_save_folder
 
 def parse_args():
     parser = HfArgumentParser(EvalArguments)
@@ -280,13 +255,7 @@ def get_gpus_max_memory(max_memory, num_gpus):
     return max_memory
 
 
-def main(cfg: DictConfig):
-
-    log = logging.getLogger(__name__)
-    eval_configs, model_config, loggers_cfg, mode, seed, dist_timeout, run_name, generations_save_folder = parse_config(cfg)
-
-    reproducibility.seed_all(seed)
-    dist.initialize_dist(get_device(None), timeout=dist_timeout)
+def main():
 
     args = parse_args()
     transformers.logging.set_verbosity_error()
@@ -321,13 +290,10 @@ def main(cfg: DictConfig):
                 f"Non valid precision {args.precision}, choose from: fp16, fp32, bf16"
             )
 
-        if args.use_auth_token:
-            args.token = os.environ["HF_TOKEN"]
-            raise warnings.warn("The `--use_auth_token` argument is deprecated and will be removed in v5 of Transformers. Please use `--token` instead.")
         model_kwargs = {
             "revision": args.revision,
             "trust_remote_code": args.trust_remote_code,
-            "token": args.token,
+            "use_auth_token": args.use_auth_token,
         }
         if args.load_in_8bit:
             print("Loading model in 8bit")
@@ -469,16 +435,4 @@ def main(cfg: DictConfig):
             f.write(dumped)
 
 if __name__ == '__main__':
-    yaml_path, args_list = sys.argv[1], sys.argv[2:]
-
-    # Disable resolving environment variables through omegaconf.
-    om.clear_resolver('oc.env')
-
-    # Load yaml and cli arguments.
-    with open(yaml_path) as f:
-        yaml_cfg = om.load(f)
-    cli_cfg = om.from_cli(args_list)
-    cfg = om.merge(yaml_cfg, cli_cfg)
-    om.resolve(cfg)
-    assert isinstance(cfg, DictConfig)
-    main(cfg)
+    main()
