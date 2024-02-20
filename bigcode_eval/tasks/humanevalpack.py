@@ -1,8 +1,9 @@
 import json
 import re
 
-from bigcode_eval.base import Task
 from evaluate import load
+
+from bigcode_eval.base import Task
 
 _CITATION = """
 @article{muennighoff2023octopack,
@@ -224,7 +225,7 @@ class HumanEvalPack(Task):
             # https://github.com/nlpxucan/WizardLM/blob/main/WizardCoder/src/humaneval_gen.py#L37
             prompt = f'Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:\n{inp}\n\n### Response:\n{prompt_base}'
         elif self.prompt == "codellama":
-            # https://hf.co/codellama             
+            # https://hf.co/codellama
             prompt = f"[INST] {inp.strip()} [/INST] {prompt_base}"
         elif self.prompt in ["tulu", "gritlm"]:
             # https://hf.co/GritLM/GritLM-7B
@@ -233,7 +234,7 @@ class HumanEvalPack(Task):
             # https://hf.co/HuggingFaceH4/zephyr-7b-beta
             prompt = f"<|user|>\n{inp}</s>\n<|assistant|>\n{prompt_base}"
         elif self.prompt == "yi":
-            # https://hf.co/01-ai/Yi-34B-Chat     
+            # https://hf.co/01-ai/Yi-34B-Chat
             prompt = f"<|im_start|>user\n{inp}<|im_end|>\n<|im_start|>assistant\n{prompt_base}"
         elif self.prompt == "codellama-70b":
             prompt = f"Source: user\n\n {inp.strip()} Source: assistant\nDestination: user \n\n{prompt_base}"
