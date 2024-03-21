@@ -12,6 +12,9 @@ import datasets
 import torch
 import transformers
 from accelerate import Accelerator
+from bigcode_eval.arguments import EvalArguments
+from bigcode_eval.evaluator import Evaluator
+from bigcode_eval.tasks import ALL_TASKS
 from composer.utils import (
     dist,
     get_device,
@@ -19,7 +22,6 @@ from composer.utils import (
     parse_uri,
     reproducibility,
 )
-from llmfoundry.utils.config_utils import log_config, pop_config
 from omegaconf import DictConfig
 from omegaconf import OmegaConf as om
 from transformers import (
@@ -28,10 +30,6 @@ from transformers import (
     AutoTokenizer,
     HfArgumentParser,
 )
-
-from bigcode_eval.arguments import EvalArguments
-from bigcode_eval.evaluator import Evaluator
-from bigcode_eval.tasks import ALL_TASKS
 
 
 class MultiChoice:
